@@ -1,0 +1,126 @@
+'create V2-3503  without null quantities'
+
+Create view V2_3503
+AS
+SELECT ar.name AS Artist_name , t2.Album , t2.track_name , t2.quan, t2.price
+FROM (SELECT a.AlbumId, a.Title AS Album, t1.track_name , a.ArtistId,t1.Quan,t1.price
+      FROM    (SELECT  t.Albumid ,t.TrackId,T.Name AS Track_name, count(Quantity) as quan, SUM(i.UnitPrice) as PRICE
+               FROM Track t
+               left JOIN InvoiceLine i
+               ON I.TrackId = T.TrackId
+               GROUP by 1,2
+	  	       ) t1
+JOIN album  a
+ON a.AlbumId = t1.AlbumId
+ORDER BY 5 desc ,6 desc
+) t2
+JOIN Artist ar
+ON t2.ArtistId = ar.ArtistId
+ORDER BY 1
+
+
+'create V1 which give: artist_name, album, track_name, order_quantity, total_price after removing null quantitities(not ordered trakcs) '
+
+CREATE VIEW V1
+AS
+SELECT ar.name AS Artist_name , t2.Album , t2.track_name , t2.quan, t2.price
+FROM (SELECT a.AlbumId, a.Title AS Album, t1.track_name , a.ArtistId,t1.Quan,t1.price
+      FROM    (SELECT  t.Albumid ,t.TrackId,T.Name AS Track_name, count(Quantity) as quan, SUM(i.UnitPrice) as PRICE
+               FROM Track t
+               left JOIN InvoiceLine i
+               ON I.TrackId = T.TrackId
+               WHERE Quantity is not NULL  ' remove null data'
+               GROUP by 1,2
+	  	       ) t1
+JOIN album  a
+ON a.AlbumId = t1.AlbumId
+ORDER BY 5 desc ,6 desc
+) t2
+JOIN Artist ar
+ON t2.ArtistId = ar.ArtistId
+ORDER BY 1
+
+
+'to get the not used artist'
+select a.ArtistId , a.Name AS Artist_name , b.Title, b.AlbumId
+from artist a
+left JOIN album b
+on a.ArtistId = b.ArtistId
+where title is null;
+
+'Q1' 'what are the top 10 albums based on sales?'
+
+SELECT Album,sum(price)
+FROM V1
+where price is not NULL
+GROUP by 1
+order by 2 desc
+limit 10 ;
+
+'Q2' 'what are the top 10 albums based on number orders'
+SELECT Album, count(v1.Quan)
+FROM V1
+where price is not NULL
+GROUP by 1
+order by 2 DESC
+limit 10 ;
+
+
+'Q3: where do chinook exist? top 10 countries in sales and orders'
+SELECT t1.BillingCountry,t1.total_sales,t1.total_orders
+from (SELECT BillingCountry,sum(total) AS total_sales, count(total) As total_orders
+from Invoice I
+GROUP by 1
+ORDER by BillingCountry
+) t1
+GROUP by 1
+ORDER by 3 desc
+limit 10;
+
+' average sales for each country'
+SELECT I.BillingCountry,avg(total) as AVG_sales
+from Invoice I
+join Customer C
+on I.CustomerId = C.CustomerId
+GROUP by 1
+order by 2 desc
+
+
+' sales agents and their performance based on total_sales'
+SELECT E.EmployeeId , E.FirstName , count(T2.CustomerId) As total_customers , SUM(T2.TOTAL_SALES) AS total_sales
+FROM (SELECT c.SupportRepId , I1.CustomerId , I1.total_sales
+      FROM (select i.CustomerId , sum(total) AS total_sales
+            FROM Invoice I
+            GROUP by 1
+            ) I1
+      JOIN Customer c
+      on c.CustomerId = I1.CustomerId
+       ) t2
+JOIN Employee E
+ON E.EmployeeId = T2.SupportRepId
+GROUP BY 1
+ORDER by 4 DESC
+'to get the sales and orderes for each sales agent'
+SELECT t3.SupportRepId AS employeeID, e.FirstName As sales_agent , t3.orders AS total_orders,t3.sales AS sales_$
+FROM (SELECT c.SupportRepId , sum(t2.orders) AS orders , sum(t2.sales) AS sales
+     FROM (SELECT t1.CustomerId ,t1.orders,sum(v.total) AS sales
+           FROM (SELECT i.CustomerId,count(InvoiceId) AS orders
+                 FROM Invoice i
+                 GROUP BY 1
+                 ORDER by CustomerId
+		         ) T1
+           JOIN invoice v
+           on v.CustomerId = t1.CustomerId
+           group by 1
+           ) t2
+     JOIN Customer c
+     on c.CustomerId = t2.CustomerId
+     GROUP by 1
+      ) t3
+JOIN Employee e
+on e.EmployeeID = t3.SupportRepId
+
+
+' prepared by Ahmed hamdy Khalil - Udacity - FWD - Advanced Data analysis on 19-7-2022'
+'If you read this code , I will be happy to get your complete feedback about everything , for improvment if you have time '
+'contact me on : ahmedkhalil010@gmail.com'
